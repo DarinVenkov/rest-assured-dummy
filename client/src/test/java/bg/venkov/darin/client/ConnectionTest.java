@@ -2,62 +2,51 @@ package bg.venkov.darin.client;
 
 import static com.jayway.restassured.RestAssured.given;
 
-import static org.junit.Assert.*;
-
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import com.jayway.restassured.RestAssured;
 import com.jayway.restassured.config.ConnectionConfig;
-import com.jayway.restassured.specification.RequestSpecification;
 
 public class ConnectionTest {
 
-    private static final String URL = "http://localhost:8080/RestAssuredServiceDummy/rest/dummy/person";
-
-    private RequestSpecification request = null;
+    private static final String URL = "http://localhost:8080/rest/dummy/person";
 
     @Before
     public void setUp() throws Exception {
-        request = given();
+        // This is required since we make a lot of consecutive requests with small response bodies.
+        // If we omit this option, suddenly hundreds of inet sockets are being opened in a small window of time.
+        // These sockets then are never closed (they stay in CLOSE_WAIT state)
+        // See: http://blogs.technet.com/b/janelewis/archive/2010/03/09/explaining-close-wait.aspx for more info
+        RestAssured.config = RestAssured.config().connectionConfig(new ConnectionConfig().closeIdleConnectionsAfterEachResponse());
     }
 
+    @After
+    public void tearDown() throws Exception {
+        RestAssured.reset();
+    }
+
+    // Fails with "org.apache.http.MalformedChunkCodingException: CRLF expected at end of chunk"
+    // Instead, this MUST complete successfully, without opening 1000 sockets.
     @Test
-    public void OpenedConnectionsTestXML() {
-        try {
-            request.contentType("application/xml").accept("application/xml").when().get(URL).asString();
-        } catch (Exception e) {
-            fail("Didn't expect an exception but got: " + e.getClass().getName() + " - " + e.getMessage());
+    public void loop1000RequestsOpenSocketsJson() throws InterruptedException
+    {
+        for (int i = 0; i < 1000; i++)
+        {
+            given().contentType("application/json").accept("application/json").when().get(URL).asString();
         }
+        Thread.sleep(10000);
     }
 
+    // This works as expected. If the content type is application/xml, the entity is consumed correctly.
     @Test
-    public void OpenedConnectionsTestJson() {
-        try {
-            request.contentType("application/json").accept("application/json").when().get(URL).asString();
-        } catch (Exception e) {
-            fail("Didn't expect an exception but got: " + e.getClass().getName() + " - " + e.getMessage());
+    public void loop1000RequestsOpenSocketsXml() throws InterruptedException
+    {
+        for (int i = 0; i < 1000; i++)
+        {
+            given().contentType("application/xml").accept("application/xml").when().get(URL).asString();
         }
+        Thread.sleep(10000);
     }
-
-    @Test(expected = org.apache.http.ConnectionClosedException.class)
-    public void ClosedConnectionsTestXML() {
-
-        request.config(RestAssured.config().connectionConfig(new ConnectionConfig().closeIdleConnectionsAfterEachResponse()));
-
-        request.contentType("application/xml").accept("application/xml").when().get(URL).asString();
-
-        fail("Expect org.apache.http.ConnectionClosedException exception!");
-    }
-
-    @Test(expected = org.apache.http.ConnectionClosedException.class)
-    public void ClosedConnectionsTestJson() {
-
-        request.config(RestAssured.config().connectionConfig(new ConnectionConfig().closeIdleConnectionsAfterEachResponse()));
-
-        request.contentType("application/json").accept("application/json").when().get(URL).asString();
-
-        fail("Expect org.apache.http.ConnectionClosedException exception!");
-    }
-
 }

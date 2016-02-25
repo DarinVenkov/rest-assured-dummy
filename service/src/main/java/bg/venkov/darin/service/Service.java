@@ -13,6 +13,7 @@ public class Service {
     @Path("/person")
     @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
     public Response getPerson() {
+		System.out.println("Request received");
         Person person = new Person();
         person.setName("DummyPerson");
         return Response.ok(person).build();
